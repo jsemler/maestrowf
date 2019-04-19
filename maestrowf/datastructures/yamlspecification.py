@@ -447,21 +447,33 @@ class YAMLSpecification(Specification):
         """
         env = StudyEnvironment()
         if "variables" in self.environment:
-            for key, value in self.environment["variables"].items():
-                logger.debug("Key: %s, Value: %s", key, value)
-                _ = environment.Variable(key, value)
-                env.add(_)
+            try:
+                for key, value in self.environment["variables"].items():
+                    logger.debug("Key: %s, Value: %s", key, value)
+                    _ = environment.Variable(key, value)
+                    env.add(_)
+            except AttributeError:
+                raise ValueError("The 'variables' section is empty or there "
+                "is an error with the syntax.")
 
         if "sources" in self.environment:
-            for source in self.environment["sources"]:
-                _ = environment.Script(source)
-                env.add(_)
+            try:
+                for source in self.environment["sources"]:
+                    _ = environment.Script(source)
+                    env.add(_)
+            except AttributeError:
+                raise ValueError("The 'sources' section is empty or there is "
+                "an error with the syntax.")
 
         if "labels" in self.environment:
-            for key, value in self.environment["labels"].items():
-                logger.debug("Key: %s, Value: %s", key, value)
-                label = environment.Variable(key, value)
-                env.add(label)
+            try:
+                for key, value in self.environment["labels"].items():
+                    logger.debug("Key: %s, Value: %s", key, value)
+                    label = environment.Variable(key, value)
+                    env.add(label)
+            except AttributeError:
+                raise ValueError("The 'labels' section is empty or there is "
+                "an error with the syntax.")
 
         if "dependencies" in self.environment:
             if "paths" in self.environment["dependencies"]:
@@ -471,13 +483,23 @@ class YAMLSpecification(Specification):
 
             if "git" in self.environment["dependencies"]:
                 for repo in self.environment["dependencies"]["git"]:
-                    optionals = deepcopy(repo)
-                    optionals.pop("name")
-                    optionals.pop("url")
-                    optionals.pop("path")
-                    _ = environment.GitDependency(repo["name"], repo["url"],
-                                                  repo["path"], **optionals)
-                    env.add(_)
+                    try:
+                        optionals = deepcopy(repo)
+                        optionals.pop("name")
+                        optionals.pop("url")
+                        optionals.pop("path")
+                        _ = environment.GitDependency(repo["name"],
+                                                      repo["url"],
+                                                      repo["path"],
+                                                      **optionals)
+                        env.add(_)
+                    except AttributeError as e:
+                        raise ValueError("Git dependency error. Check the "
+                            "`name` key is defined and the entry is a list "
+                            "(e.g., `- name: value`)")
+                    except KeyError as e:
+                        raise ValueError("Git dependency {} missing key: "
+                            "{}".format(repo, e))
 
         return env
 
@@ -487,14 +509,17 @@ class YAMLSpecification(Specification):
 
         :returns: A ParameterGenerator with data from the specification.
         """
-        params = ParameterGenerator()
-        for key, value in self.globals.items():
-            if "name" not in value:
-                params.add_parameter(key, value["values"], value["label"])
-            else:
-                params.add_parameter(key, value["values"], value["label"],
-                                     value["name"])
-
+        try:
+            params = ParameterGenerator()
+            for key, value in self.globals.items():
+                if "name" not in value:
+                    params.add_parameter(key, value["values"], value["label"])
+                else:
+                    params.add_parameter(key, value["values"], value["label"],
+                                        value["name"])
+        except AttributeError as e:
+            logger.error(e)
+            raise ValueError("Unable to load global.parameters.")
         return params
 
     def get_study_steps(self):
